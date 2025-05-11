@@ -30,7 +30,7 @@ def main():
 
     # 1. Скачиваем аудио из хранилища s3 в папку temp
     file_key = "interview1.wav"
-    do_clean = 'False'
+    do_clean = 'True'
 
     print(f"Получен запрос на обработку файла: {file_key}")
     print(f"Флаг обработки: {do_clean}")
