@@ -1,12 +1,15 @@
 
 import os
 import shutil
+
+import psycopg2
 import torchaudio
 from demucs.audio import AudioFile
 from demucs.pretrained import get_model
 from demucs.apply import apply_model
 from typing import Optional
 
+from dotenv import load_dotenv
 from pydub import AudioSegment
 
 from services.model_loader import load_demucs_model
@@ -85,3 +88,71 @@ def get_audio_duration(file_path: str) -> float:
     except Exception as e:
         print(f"Ошибка при определении длительности аудио: {e}")
         return -1
+
+
+def update_cleaned_record(record_id, audio_length, name_file_cleaned):
+    # Загрузка переменных из .env
+    load_dotenv()
+
+    # Получаем connection string
+    connection_string = os.getenv('DATABASE_URL')
+
+    try:
+        # Подключение к БД
+        connection = psycopg2.connect(connection_string)
+        print("Успешное подключение к БД")
+        cursor = connection.cursor()
+
+        # Обновление нескольких полей
+        update_query = """
+            UPDATE myusers_callitem
+            SET audio_length = %s,
+                name_file_cleaned = %s
+            WHERE id = %s;
+        """
+        cursor.execute(update_query, (audio_length, name_file_cleaned, record_id))
+        connection.commit()
+
+        print(f"Запись с id={record_id} успешно обновлена.")
+
+    except Exception as e:
+        print(f"Ошибка при обновлении записи: {e}")
+
+    finally:
+        # Закрытие соединения
+        if connection:
+            cursor.close()
+            connection.close()
+
+def update_record(record_id, audio_length):
+    # Загрузка переменных из .env
+    load_dotenv()
+
+    # Получаем connection string
+    connection_string = os.getenv('DATABASE_URL')
+
+    try:
+        # Подключение к БД
+        connection = psycopg2.connect(connection_string)
+        print("Успешное подключение к БД")
+        cursor = connection.cursor()
+
+        # Обновление нескольких полей
+        update_query = """
+            UPDATE myusers_callitem
+            SET audio_length = %s
+            WHERE id = %s;
+        """
+        cursor.execute(update_query, (audio_length, record_id))
+        connection.commit()
+
+        print(f"Запись с id={record_id} успешно обновлена.")
+
+    except Exception as e:
+        print(f"Ошибка при обновлении записи: {e}")
+
+    finally:
+        # Закрытие соединения
+        if connection:
+            cursor.close()
+            connection.close()

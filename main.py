@@ -8,12 +8,13 @@ import requests
 from dotenv import load_dotenv
 from pydub import AudioSegment
 import torch
-from services.demux_service import do_clean_file, get_audio_duration
+from services.demux_service import do_clean_file, get_audio_duration, update_cleaned_record, update_record
+import runpod
 
 
-def main():
+def handler(event):
     """
-        Принимает имя файла в хранилище s3 и флаг do_clean (обрабатывать или не обрабатывать).
+        Принимает имя файла в хранилище s3, флаг do_clean (обрабатывать или не обрабатывать), id записи
         1. Скачивает из хранилища s3 аудио в папку temp.
         2. Оценивает длительность аудио и сохраняет это в БД.
         3. Если флаг do_clean=True - очищает и сохраняет новый файл в temp под именем _cleaned.wav.
@@ -29,11 +30,17 @@ def main():
     load_dotenv()
 
     # 1. Скачиваем аудио из хранилища s3 в папку temp
-    file_key = "interview1.wav"
-    do_clean = 'True'
+    #file_key = event['input']['file_key']
+    #do_clean = event['input']['do_clean']
+    #item_id = event['input']['item_id']
+
+    file_key = 'interview1.wav'
+    item_id = 1
+    do_clean = True
 
     print(f"Получен запрос на обработку файла: {file_key}")
     print(f"Флаг обработки: {do_clean}")
+    print(f"ID записи: {item_id}")
 
     # Параметры хранилища s3
     AWS_ACCESS_KEY_ID = os.getenv("AWS_ACCESS_KEY_ID")
@@ -71,6 +78,7 @@ def main():
 
     # === Определяем длительность аудиофайла ===
     duration = get_audio_duration(temp_file_path)
+    print(f"Продолжительность файла: {duration}")
 
     # === Очищаем аудио если передан флаг do_clean ===
     if do_clean is True:
@@ -83,8 +91,8 @@ def main():
         cleaned_file_name = os.path.basename(cleaned_file_path)
         print(f"☁️ Файл получит имя: {cleaned_file_name}")
 
-        duration = round(time.time() - start_time, 2)  # Время в секундах с округлением
-        print(f"✅ Готово за {duration} секунд.")
+        duration_time = round(time.time() - start_time, 2)  # Время в секундах с округлением
+        print(f"✅ Готово за {duration_time} секунд.")
 
         # === загружаем очищенное аудио в s3 ===
         s3.upload_file(
@@ -94,6 +102,9 @@ def main():
         )
         print(f"☁️ Файл {cleaned_file_name} загружен в S3 (в корень бакета)")
 
+        # Сохраняем данные в БД
+        update_cleaned_record(item_id, duration, cleaned_file_name)
+
         # === Удаляем временные файлы ===
         os.remove(cleaned_file_path)
         os.remove(temp_file_path)
@@ -102,7 +113,11 @@ def main():
 
         # Отправляем в Транскрибатор очищенную аудио
         data = {
-            'input': {"file_key": cleaned_file_name}
+            'input':
+                {
+                    "file_key": cleaned_file_name,
+                    "item_id": item_id
+                }
         }
 
         response = requests.post(f'https://api.runpod.ai/v2/{TRANSCRIBATOR_QUEUE}/run', headers=headers, json=data)
@@ -113,9 +128,15 @@ def main():
     else:
         # если флаг не передан - сразу направляет запрос в транскрибатор
         data = {
-            'input': {"file_key": file_key}
+            'input':
+                {
+                    "file_key": file_key,
+                    "item_id": item_id
+                }
         }
         response = requests.post(f'https://api.runpod.ai/v2/{TRANSCRIBATOR_QUEUE}/run', headers=headers, json=data)
+
+        update_record(item_id, duration)
 
         print(f"Ваша аудиозапись была сраз направлена в сервис Транскрибации. Ответ: {response.json()}")
     # сохраняем длительность файла в БД
@@ -123,4 +144,6 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    #runpod.serverless.start({'handler': handler})
+    handler(None)
+

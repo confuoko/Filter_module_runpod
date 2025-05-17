@@ -2,8 +2,6 @@
 uvicorn
 
 soundfile
-torchaudio==2.7.0
-torch
 python-Levenshtein
 pydu
 pydub
@@ -20,3 +18,5 @@ python-dotenv
 boto3
 
 demucs
+
+runpod
